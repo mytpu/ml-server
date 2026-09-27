@@ -1,0 +1,46 @@
+# ---------- Сборка ----------
+# Gradle: кэш и служебные файлы
+.gradle/
+build/
+# Kotlin 2.x: данные компилятора и сессий
+.kotlin/
+# IntelliJ, если собирала сама
+out/
+# ВАЖНО: gradle/wrapper/gradle-wrapper.jar НЕ игнорируем — без него ./gradlew не запустится
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.fleet/
+
+# ---------- Секреты и локальные настройки ----------
+# ключи и переменные окружения — никогда в git
+.env
+.env.*
+*.env
+!*.env.example
+!.env.example
+local.properties
+# на всякий случай: сертификаты и ключи
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# ---------- Логи и временные файлы ----------
+*.log
+logs/
+*.tmp
+*.swp
+*~
+# тела запросов для ручной проверки через curl
+req*.json
+
+# ---------- ОС ----------
+.DS_Store
+Thumbs.db
+desktop.ini
