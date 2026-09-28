@@ -1,7 +1,9 @@
 package ru.tpu.ml.api
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
-import kotlinx.serialization.json.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 val AppJson = Json {
     ignoreUnknownKeys = true

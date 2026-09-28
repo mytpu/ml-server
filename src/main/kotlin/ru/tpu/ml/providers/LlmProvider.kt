@@ -5,8 +5,6 @@ import ru.tpu.ml.api.ChatChunk
 import ru.tpu.ml.api.ChatRequest
 import ru.tpu.ml.api.ChatResponse
 
-// Договор для всех моделей: заглушка, внешнее API, vLLM на Spark.
-// Только заголовки функций — как они работают, решает каждый провайдер сам.
 interface LlmProvider {
     val name: String
 

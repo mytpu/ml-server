@@ -18,7 +18,7 @@ fun Application.configureMonitoring() {
         callIdMdc("requestId")
         filter { call -> call.request.path().startsWith("/v1") }
         format { call ->
-            "${call.response.status()} ${call.request.httpMethod.value} ${call.request.path()} ${call.processingTimeMillis()}"
+            "${call.response.status()} ${call.request.httpMethod.value} ${call.request.path()} ms:${call.processingTimeMillis()}"
         }
     }
 }

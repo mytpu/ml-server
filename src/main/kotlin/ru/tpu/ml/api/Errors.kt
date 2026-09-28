@@ -1,20 +1,17 @@
 package ru.tpu.ml.api
 
-import io.ktor.client.plugins.HttpRequestTimeoutException
-import io.ktor.http.HttpStatusCode
+import io.ktor.client.plugins.*
+import io.ktor.http.*
 import io.ktor.http.HttpStatusCode.Companion.BadRequest
 import io.ktor.http.HttpStatusCode.Companion.GatewayTimeout
 import io.ktor.http.HttpStatusCode.Companion.InternalServerError
 import io.ktor.http.HttpStatusCode.Companion.Unauthorized
 import io.ktor.http.HttpStatusCode.Companion.UnsupportedMediaType
-import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.install
-import io.ktor.server.application.log
+import io.ktor.server.application.*
 import io.ktor.server.plugins.BadRequestException
-import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.response.respond
-import ru.tpu.ml.providers.UpstreamException
+import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.response.*
 
 class MlException(
     val status: HttpStatusCode,
@@ -23,27 +20,23 @@ class MlException(
     override val message: String,
     val details: String? = null,
     val retryAfter: String? = null,
-    cause: Throwable
-) : RuntimeException() {
-
-}
+    cause: Throwable? = null
+) : RuntimeException(message, cause)
 
 fun Application.configureErrors() {
     install(StatusPages) {
-        exception<UpstreamException> { call, cause ->
-            call.respond(
-                HttpStatusCode.BadGateway,
-                ErrorBody(ErrorInfo("Модель недоступна, попробуйте позже", "upstream_error"))
-            )
-        }
-        exception<HttpRequestTimeoutException> { call, cause ->
-            call.respond(GatewayTimeout, ErrorBody(ErrorInfo("Модель не ответила вовремя", "timeout")))
-        }
-        exception<MlException> { call, cause ->
+        exception<BadRequestException> { call, cause ->
             call.respond(
                 BadRequest,
                 ErrorBody(ErrorInfo(cause.message ?: "Некорректный запрос", "invalid_request_error"))
             )
+        }
+        exception<MlException> { call, cause ->
+            val line : String = "${cause.code} ${cause.details ?: cause.message}"
+            if (cause.status.value >= 500) call.application.log.warn(line)
+            else call.application.log.info(line)
+            cause.retryAfter?.let { call.response.header(HttpHeaders.RetryAfter, it) }
+            call.respondError(cause.status,cause.type,cause.code,cause.message,cause.details)
         }
         exception<Throwable> { call, cause ->
             call.application.log.error("Unhandled", cause)
@@ -61,6 +54,9 @@ fun Application.configureErrors() {
                 ErrorBody(ErrorInfo("Нужен заголовок Content-Type: application/json", "invalid_request_error"))
             )
         }
+        status(HttpStatusCode.NotFound) { call, _ ->
+            call.respondError(HttpStatusCode.NotFound, "invalid_request_error", "not_found", "Нет такого пути")
+        }
     }
 }
 
@@ -71,5 +67,5 @@ private suspend fun ApplicationCall.respondError(
     message: String,
     details: String? = null
 ) {
-    respond(status, ErrorBody(ErrorInfo(message, type, code, details)))
+    respond(status, ErrorBody(ErrorInfo(message = message, type = type, code = code, request_id = callId, details = details)))
 }

@@ -1,26 +1,16 @@
 package ru.tpu.ml
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.bearer
-import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.BadRequestException
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.request.receive
-import io.ktor.server.response.respond
-import io.ktor.server.routing.get
-import io.ktor.server.routing.post
-import io.ktor.server.routing.routing
-import ru.tpu.ml.api.AppJson
-import ru.tpu.ml.api.BackendPrincipal
-import ru.tpu.ml.api.ChatRequest
-import ru.tpu.ml.api.ModelInfo
-import ru.tpu.ml.api.ModelList
-import ru.tpu.ml.api.configureErrors
-import ru.tpu.ml.api.configureMonitoring
+import io.ktor.http.HttpStatusCode.Companion.BadRequest
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import io.ktor.server.plugins.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import ru.tpu.ml.api.*
 import ru.tpu.ml.config.Config
 import ru.tpu.ml.core.ChatService
 import ru.tpu.ml.providers.LlmProvider
@@ -76,7 +66,8 @@ fun Application.module(config : Config, chatService:ChatService) {
             }
             post("/v1/chat/completions"){
                 val request = call.receive<ChatRequest>()
-                if (request.messages.isEmpty()) {throw BadRequestException("messages is empty")
+                if (request.messages.isEmpty()) {
+                    throw MlException(BadRequest, "invalid_request_error", "empty_messages", "messages пустой")
                 }
                 call.respond(chatService.complete(request))
             }

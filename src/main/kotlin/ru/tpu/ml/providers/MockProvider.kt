@@ -10,20 +10,14 @@ import ru.tpu.ml.api.FunctionCall
 import ru.tpu.ml.api.ToolCall
 import ru.tpu.ml.api.Usage
 
-// Модель-имитация: отвечает по простым правилам, без нейронки.
-// Нужна, чтобы бэк мог подключаться уже сейчас, и для тестов.
 object MockProvider : LlmProvider {
     override val name = "mock"
 
     override suspend fun complete(request: ChatRequest): ChatResponse {
-        // А. Факты из запроса
         val last = request.messages.last()
         val userText = request.messages.lastOrNull { it.role == "user" }?.content ?: ""
         val hasRaspTool = request.tools?.any { it.function.name == "rasp_day" } == true
 
-        // Б. Выбор ответа — срабатывает первое подходящее правило.
-        // Правило про tool стоит первым: во втором заходе бэка текст пользователя
-        // всё ещё «расписание», и без этого заглушка просила бы инструмент бесконечно.
         val message = when {
             last.role == "tool" -> ChatMessage(
                 role = "assistant",
@@ -49,10 +43,8 @@ object MockProvider : LlmProvider {
             )
         }
 
-        // В. Чем закончился ответ: просьбой вызвать инструмент или текстом
         val finishReason = if (message.tool_calls != null) "tool_calls" else "stop"
 
-        // Г. Собрать ответ в формате OpenAI
         return ChatResponse(
             id = "mock-${System.nanoTime()}",
             created = System.currentTimeMillis() / 1000, // секунды, не миллисекунды
