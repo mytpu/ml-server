@@ -112,6 +112,8 @@ data class ErrorInfo(
     val message: String,
     val type : String,
     val code : String? = null,
+    val request_id : String? = null,
+    val details: String? = null
 )
 @Serializable
 data class ModelList(

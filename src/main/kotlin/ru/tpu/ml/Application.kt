@@ -7,6 +7,7 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.bearer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -18,6 +19,8 @@ import ru.tpu.ml.api.BackendPrincipal
 import ru.tpu.ml.api.ChatRequest
 import ru.tpu.ml.api.ModelInfo
 import ru.tpu.ml.api.ModelList
+import ru.tpu.ml.api.configureErrors
+import ru.tpu.ml.api.configureMonitoring
 import ru.tpu.ml.config.Config
 import ru.tpu.ml.core.ChatService
 import ru.tpu.ml.providers.LlmProvider
@@ -49,6 +52,8 @@ fun main(){
 }
 
 fun Application.module(config : Config, chatService:ChatService) {
+    configureMonitoring()
+    configureErrors()
     install(ContentNegotiation) {
         json(AppJson)
     }
@@ -69,8 +74,10 @@ fun Application.module(config : Config, chatService:ChatService) {
             get("/v1/models"){
                 call.respond(ModelList(data = listOf(ModelInfo(id = "tpu-assistant"), ModelInfo(id = "tpu-analyze"))))
             }
-            post("v1/chat/completions"){
+            post("/v1/chat/completions"){
                 val request = call.receive<ChatRequest>()
+                if (request.messages.isEmpty()) {throw BadRequestException("messages is empty")
+                }
                 call.respond(chatService.complete(request))
             }
         }
