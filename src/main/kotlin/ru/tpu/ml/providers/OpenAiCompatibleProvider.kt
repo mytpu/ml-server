@@ -11,6 +11,7 @@ import io.ktor.http.*
 import io.ktor.http.HttpStatusCode.Companion.BadGateway
 import io.ktor.http.HttpStatusCode.Companion.GatewayTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
+import io.ktor.serialization.JsonConvertException
 import io.ktor.util.network.UnresolvedAddressException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.SerializationException
@@ -58,14 +59,15 @@ class OpenAiCompatibleProvider(
         } catch (e: java.net.ConnectException) {
             throw MlException(BadGateway, "upstream_error", "upstream_unreachable", "Модель недоступна", cause = e)
         } catch (e: UnresolvedAddressException) {
-            throw MlException(BadGateway, "upstream_error", "upstream_unreachable", "адрес не найден в DNS", cause = e)
-        } catch (e: SerializationException) {
+            throw MlException(BadGateway, "upstream_error", "upstream_unreachable", "Модель недоступна", cause = e, details = "адрес не найден в DNS")
+        } catch (e: JsonConvertException) {
             throw MlException(
                 BadGateway,
                 "upstream_error",
                 "upstream_bad_response",
                 "Модель ответила в неизвестном формате",
-                cause = e
+                cause = e,
+                details = e.message
             )
         }
     }

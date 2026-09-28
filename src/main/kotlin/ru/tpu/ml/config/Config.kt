@@ -11,6 +11,7 @@ data class Config(
     val maxConcurrent: Int,
     val requestTimeoutMs: Long,
     val upstreamModel : String?,
+    val debug : Boolean,
 ) {
     companion object {
         fun fromEnv() : Config {
@@ -23,6 +24,7 @@ data class Config(
                 maxConcurrent = getenv("ML_MAX_CONCURRENT")?.toIntOrNull() ?: 8,
                 requestTimeoutMs = getenv("ML_TIMEOUT_MS")?.toLongOrNull() ?: 60000,
                 upstreamModel = getenv("UPSTREAM_MODEL")?.takeIf { it.isNotBlank() },
+                debug = getenv("ML_DEBUG") == "true"
             )
         }
     }

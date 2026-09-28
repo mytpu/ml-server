@@ -12,6 +12,7 @@ import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.callid.callId
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.response.*
+import ru.tpu.ml.config.Config
 
 class MlException(
     val status: HttpStatusCode,
@@ -23,7 +24,7 @@ class MlException(
     cause: Throwable? = null
 ) : RuntimeException(message, cause)
 
-fun Application.configureErrors() {
+fun Application.configureErrors(config : Config) {
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
             call.respond(
@@ -36,7 +37,7 @@ fun Application.configureErrors() {
             if (cause.status.value >= 500) call.application.log.warn(line)
             else call.application.log.info(line)
             cause.retryAfter?.let { call.response.header(HttpHeaders.RetryAfter, it) }
-            call.respondError(cause.status,cause.type,cause.code,cause.message,cause.details)
+            call.respondError(cause.status,cause.type,cause.code,cause.message,cause.details.takeIf { config.debug })
         }
         exception<Throwable> { call, cause ->
             call.application.log.error("Unhandled", cause)

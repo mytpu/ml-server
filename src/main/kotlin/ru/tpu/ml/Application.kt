@@ -43,7 +43,7 @@ fun main(){
 
 fun Application.module(config : Config, chatService:ChatService) {
     configureMonitoring()
-    configureErrors()
+    configureErrors(config)
     install(ContentNegotiation) {
         json(AppJson)
     }
