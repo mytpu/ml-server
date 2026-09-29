@@ -3,6 +3,7 @@ package ru.tpu.ml.providers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.encodeToString
 import ru.tpu.ml.api.*
 
 object MockProvider : LlmProvider {
@@ -11,22 +12,26 @@ object MockProvider : LlmProvider {
     override suspend fun complete(request: ChatRequest): ChatResponse {
         val last = request.messages.last()
         val userText = request.messages.lastOrNull { it.role == "user" }?.content ?: ""
-        val hasRaspTool = request.tools?.any { it.function.name == "rasp_day" } == true
-
+        fun hasTool(name :String) : Boolean {
+            return request.tools?.any { it.function.name == name } == true
+        }
+        val rule = TOOL_RULES.firstOrNull { r->
+            hasTool(r.tool) &&
+                    r.keywords.any{word -> userText.contains(word,ignoreCase = true)}}
         val message = when {
             last.role == "tool" -> ChatMessage(
                 role = "assistant",
                 content = "По данным инструмента: ${(last.content ?: "").take(200)}",
             )
 
-            userText.contains("распис", ignoreCase = true) && hasRaspTool -> ChatMessage(
+           rule != null -> ChatMessage(
                 role = "assistant",
                 tool_calls = listOf(
                     ToolCall(
-                        id = "call_1",
+                        id = "call_${rule.tool}",
                         function = FunctionCall(
-                            name = "rasp_day",
-                            arguments = """{"date":"2026-09-27"}""",
+                            name = rule.tool,
+                            arguments = AppJson.encodeToString(rule.arguments),
                         ),
                     ),
                 ),
@@ -48,7 +53,11 @@ object MockProvider : LlmProvider {
             usage = Usage(0, 0, 0),
         )
     }
-
+    fun fillArgs(args : Map<String, String>) : Map<String, String> =
+        args.mapValues {
+            it.value.replace("{{text}}", "userText")
+                .replace("{{today}}", "date")
+                .replace("{{tomorrow}}", "date+day")}
     override fun stream(request: ChatRequest): Flow<ChatChunk> =
         flow {
             val response = complete(request)
