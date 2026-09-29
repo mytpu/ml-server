@@ -21,7 +21,7 @@ data class ChatRequest(
     val temperature : Double? = null,
     val max_tokens : Int? = null,
     val response_format :JsonObject? = null,
-    val stream_option: JsonObject? = null,
+    val stream_options: JsonObject? = null,
 
 )
 @Serializable

@@ -1,20 +1,17 @@
 package ru.tpu.ml
 
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
+import io.ktor.http.*
 import io.ktor.http.HttpStatusCode.Companion.BadRequest
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import io.ktor.server.plugins.*
-import io.ktor.server.plugins.callid.callId
+import io.ktor.server.plugins.callid.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.encodeToString
 import ru.tpu.ml.api.*
 import ru.tpu.ml.config.Config
@@ -90,23 +87,45 @@ fun Application.module(config: Config, chatService: ChatService) {
                             }
                             write("data: [DONE]\n\n")
                             flush()
-                        }
-                        catch (e: CancellationException) {
+                        } catch (e: CancellationException) {
                             throw e
-                        }
-                        catch (e: MlException) {
-                            if(e.status.value >= 500){
+                        } catch (e: MlException) {
+                            if (e.status.value >= 500) {
                                 call.application.log.warn("stream ${e.code} ${e.details ?: e.message}")
-                            }
-                            else{
+                            } else {
                                 call.application.log.info("stream ${e.code} ${e.details ?: e.message}")
                             }
-                            write("data: ${AppJson.encodeToString(ErrorBody(ErrorInfo(message = e.message, type = e.type, code = e.code,request_id = requestId)))}\n\n")
+                            write(
+                                "data: ${
+                                    AppJson.encodeToString(
+                                        ErrorBody(
+                                            ErrorInfo(
+                                                message = e.message,
+                                                type = e.type,
+                                                code = e.code,
+                                                request_id = requestId
+                                            )
+                                        )
+                                    )
+                                }\n\n"
+                            )
                             flush()
-                        }
-                        catch (e: Throwable) {
+                        } catch (e: Throwable) {
                             call.application.log.error("stream internal_error", e)
-                            write("data: ${AppJson.encodeToString(ErrorBody(ErrorInfo(message = "Внутренняя ошибка ML-сервера",type = "internal_error",code = "internal_error",request_id = requestId)))}\n\n")
+                            write(
+                                "data: ${
+                                    AppJson.encodeToString(
+                                        ErrorBody(
+                                            ErrorInfo(
+                                                message = "Внутренняя ошибка ML-сервера",
+                                                type = "internal_error",
+                                                code = "internal_error",
+                                                request_id = requestId
+                                            )
+                                        )
+                                    )
+                                }\n\n"
+                            )
                             flush()
                         }
                     }
