@@ -20,7 +20,9 @@ data class ChatRequest(
     val stream : Boolean = false,
     val temperature : Double? = null,
     val max_tokens : Int? = null,
-    val response_format :JsonObject? = null
+    val response_format :JsonObject? = null,
+    val stream_option: JsonObject? = null,
+
 )
 @Serializable
 data class ChatMessage(
@@ -28,6 +30,7 @@ data class ChatMessage(
     val content : String? = null,
     val tool_calls : List<ToolCall>? = null,
     val tool_call_id : String? = null,
+    val reasoning_content: String? = null
 )
 @Serializable
 data class ToolDef(
@@ -92,6 +95,7 @@ data class Delta(
     val role : String? = null,
     val content : String? = null,
     val tool_calls : List<ToolCallDelta>? = null,
+    val reasoning_content: String? = null
 )
 @Serializable
 data class ToolCallDelta(

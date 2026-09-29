@@ -1,5 +1,7 @@
 package ru.tpu.ml.core
 
+import kotlinx.coroutines.flow.Flow
+import ru.tpu.ml.api.ChatChunk
 import ru.tpu.ml.api.ChatRequest
 import ru.tpu.ml.api.ChatResponse
 import ru.tpu.ml.providers.LlmProvider
@@ -7,5 +9,8 @@ import ru.tpu.ml.providers.LlmProvider
 class ChatService(private val provider: LlmProvider) {
     suspend fun complete(request: ChatRequest): ChatResponse {
         return provider.complete(request)
+    }
+    fun stream(request: ChatRequest): Flow<ChatChunk> {
+        return provider.stream(request)
     }
 }

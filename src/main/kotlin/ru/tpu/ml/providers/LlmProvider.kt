@@ -9,6 +9,5 @@ interface LlmProvider {
     val name: String
 
     suspend fun complete(request: ChatRequest): ChatResponse
-
     fun stream(request: ChatRequest): Flow<ChatChunk>
 }

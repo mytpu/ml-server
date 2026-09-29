@@ -2,19 +2,17 @@ package ru.tpu.ml.providers
 
 import io.ktor.client.*
 import io.ktor.client.call.*
-import io.ktor.client.network.sockets.ConnectTimeoutException
-import io.ktor.client.network.sockets.SocketTimeoutException
-import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.network.sockets.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.HttpStatusCode.Companion.BadGateway
 import io.ktor.http.HttpStatusCode.Companion.GatewayTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
-import io.ktor.serialization.JsonConvertException
-import io.ktor.util.network.UnresolvedAddressException
+import io.ktor.serialization.*
+import io.ktor.util.network.*
 import kotlinx.coroutines.flow.Flow
-import kotlinx.serialization.SerializationException
 import ru.tpu.ml.api.ChatChunk
 import ru.tpu.ml.api.ChatRequest
 import ru.tpu.ml.api.ChatResponse
@@ -71,7 +69,6 @@ class OpenAiCompatibleProvider(
             )
         }
     }
-
     private fun upstreamError(status: Int, body: String, retryAfter: String?): MlException {
         val details = "upstream $status: $body"
         return when (status) {

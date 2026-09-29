@@ -1,4 +1,7 @@
 package ru.tpu.ml
+
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode.Companion.BadRequest
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -6,10 +9,13 @@ import io.ktor.server.auth.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.*
+import io.ktor.server.plugins.callid.callId
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.encodeToString
 import ru.tpu.ml.api.*
 import ru.tpu.ml.config.Config
 import ru.tpu.ml.core.ChatService
@@ -18,10 +24,11 @@ import ru.tpu.ml.providers.MockProvider
 import ru.tpu.ml.providers.OpenAiCompatibleProvider
 import ru.tpu.ml.providers.createHttpClient
 import java.security.MessageDigest
+import kotlin.coroutines.cancellation.CancellationException
 
-fun main(){
+fun main() {
     val config = Config.fromEnv()
-    val provider : LlmProvider = when (config.provider) {
+    val provider: LlmProvider = when (config.provider) {
         "openai" -> {
             OpenAiCompatibleProvider(
                 baseUrl = config.upstreamUrl ?: error("Не задан upstream url"),
@@ -30,30 +37,32 @@ fun main(){
                 client = createHttpClient(config)
             )
         }
+
         else -> {
             MockProvider
         }
     }
     val chatService = ChatService(provider)
 
-    embeddedServer(Netty, config.port ) {
+    embeddedServer(Netty, config.port) {
         module(config, chatService)
     }.start(true)
 }
 
-fun Application.module(config : Config, chatService:ChatService) {
+fun Application.module(config: Config, chatService: ChatService) {
     configureMonitoring()
     configureErrors(config)
     install(ContentNegotiation) {
         json(AppJson)
     }
     install(Authentication) {
-        bearer ("backend"){
+        bearer("backend") {
             authenticate { credential ->
-                if (MessageDigest.isEqual(credential.token.toByteArray(),config.backendApiKey.toByteArray()))
+                if (MessageDigest.isEqual(credential.token.toByteArray(), config.backendApiKey.toByteArray()))
                     BackendPrincipal("backend")
                 else
-                    null }
+                    null
+            }
         }
     }
     routing {
@@ -61,15 +70,49 @@ fun Application.module(config : Config, chatService:ChatService) {
             call.respond(mapOf("status" to "ok"))
         }
         authenticate("backend") {
-            get("/v1/models"){
+            get("/v1/models") {
                 call.respond(ModelList(data = listOf(ModelInfo(id = "tpu-assistant"), ModelInfo(id = "tpu-analyze"))))
             }
-            post("/v1/chat/completions"){
+            post("/v1/chat/completions") {
                 val request = call.receive<ChatRequest>()
                 if (request.messages.isEmpty()) {
                     throw MlException(BadRequest, "invalid_request_error", "empty_messages", "messages пустой")
                 }
-                call.respond(chatService.complete(request))
+                if (request.stream) {
+                    val requestId = call.callId
+                    call.response.header(HttpHeaders.CacheControl, "no-cache")
+                    call.response.header("X-Accel-Buffering", "no")
+                    call.respondTextWriter(contentType = ContentType.Text.EventStream) {
+                        try {
+                            chatService.stream(request).collect { chunk ->
+                                write("data: ${AppJson.encodeToString(chunk)}\n\n")
+                                flush()
+                            }
+                            write("data: [DONE]\n\n")
+                            flush()
+                        }
+                        catch (e: CancellationException) {
+                            throw e
+                        }
+                        catch (e: MlException) {
+                            if(e.status.value >= 500){
+                                call.application.log.warn("stream ${e.code} ${e.details ?: e.message}")
+                            }
+                            else{
+                                call.application.log.info("stream ${e.code} ${e.details ?: e.message}")
+                            }
+                            write("data: ${AppJson.encodeToString(ErrorBody(ErrorInfo(message = e.message, type = e.type, code = e.code,request_id = requestId)))}\n\n")
+                            flush()
+                        }
+                        catch (e: Throwable) {
+                            call.application.log.error("stream internal_error", e)
+                            write("data: ${AppJson.encodeToString(ErrorBody(ErrorInfo(message = "Внутренняя ошибка ML-сервера",type = "internal_error",code = "internal_error",request_id = requestId)))}\n\n")
+                            flush()
+                        }
+                    }
+                } else {
+                    call.respond(chatService.complete(request))
+                }
             }
         }
     }

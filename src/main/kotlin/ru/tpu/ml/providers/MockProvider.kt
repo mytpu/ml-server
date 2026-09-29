@@ -1,14 +1,9 @@
 package ru.tpu.ml.providers
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import ru.tpu.ml.api.ChatChunk
-import ru.tpu.ml.api.ChatMessage
-import ru.tpu.ml.api.ChatRequest
-import ru.tpu.ml.api.ChatResponse
-import ru.tpu.ml.api.Choice
-import ru.tpu.ml.api.FunctionCall
-import ru.tpu.ml.api.ToolCall
-import ru.tpu.ml.api.Usage
+import kotlinx.coroutines.flow.flow
+import ru.tpu.ml.api.*
 
 object MockProvider : LlmProvider {
     override val name = "mock"
@@ -54,5 +49,36 @@ object MockProvider : LlmProvider {
         )
     }
 
-    override fun stream(request: ChatRequest): Flow<ChatChunk> = TODO("шаг 7")
+    override fun stream(request: ChatRequest): Flow<ChatChunk> =
+        flow {
+            val response = complete(request)
+            val message = response.choices[0].message
+            val finish_reason = response.choices[0].finish_reason
+            fun chunk(delta: Delta, finish_reason: String? = null): ChatChunk =
+                ChatChunk(
+                    id = response.id, created = response.created, model = response.model, choices = listOf(
+                        ChunkChoice(delta = delta, finish_reason = finish_reason)
+                    )
+                )
+            emit(chunk(Delta(role = "assistant")))
+            if (message.tool_calls == null) {
+                for (part in (message.content ?: "").chunked(10)) {
+                    delay(50)
+                    emit(chunk(Delta(content = part)))
+                }
+            } else {
+                emit(chunk(Delta(tool_calls = message.tool_calls.mapIndexed { index, call ->
+                    ToolCallDelta(
+                        index = index,
+                        id = call.id,
+                        type = call.type,
+                        function = FunctionCallDelta(
+                            name = call.function.name,
+                            arguments = call.function.arguments
+                        ))
+                }
+                )))
+            }
+            emit(chunk(Delta(), finish_reason = finish_reason))
+        }
 }
