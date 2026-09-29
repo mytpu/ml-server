@@ -12,11 +12,11 @@ import io.ktor.http.HttpStatusCode.Companion.GatewayTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.serialization.*
 import io.ktor.util.network.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.Flow
-import ru.tpu.ml.api.ChatChunk
-import ru.tpu.ml.api.ChatRequest
-import ru.tpu.ml.api.ChatResponse
-import ru.tpu.ml.api.MlException
+import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.SerializationException
+import ru.tpu.ml.api.*
 import kotlin.coroutines.cancellation.CancellationException
 
 class OpenAiCompatibleProvider(
@@ -26,7 +26,68 @@ class OpenAiCompatibleProvider(
     private val client: HttpClient
 ) : LlmProvider {
     override val name = "openai"
-    override fun stream(request: ChatRequest): Flow<ChatChunk> = TODO("Шаг 7")
+    override fun stream(request: ChatRequest): Flow<ChatChunk> = flow {
+        try {
+            client.preparePost("$baseUrl/chat/completions") {
+                bearerAuth(apiKey)
+                timeout { requestTimeoutMillis = 300_000 }
+                contentType(ContentType.Application.Json)
+                setBody(request.copy(model = model, stream = true))
+            }.execute { resp ->
+                if (!resp.status.isSuccess()) {
+                    throw upstreamError(
+                        resp.status.value, resp.bodyAsText().take(300),
+                        resp.headers[HttpHeaders.RetryAfter]
+                    )
+                }
+                val channel = resp.bodyAsChannel()
+                var cuttedChunks = 0
+                while (true) {
+                    val line = channel.readUTF8Line() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val cut = line.substringAfter("data:").trim()
+                    if (cut != "[DONE]") {
+                        val json = AppJson.decodeFromString<ChatChunk>(cut)
+                        emit(json.copy(model = request.model))
+                        cuttedChunks++
+                    } else break
+                }
+                if (cuttedChunks == 0) {throw MlException(BadGateway,code = "upstream_bad_response", message = "Модель дала пустой ответ", type = "upstream_error", details = "stream: no data chunks")
+                }
+            }
+        } catch (e: MlException) {
+            throw e
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ConnectTimeoutException) {
+            throw MlException(GatewayTimeout, "timeout", "upstream_connect_timeout", "Модель не отвечает", cause = e)
+        } catch (e: HttpRequestTimeoutException) {
+            throw MlException(GatewayTimeout, "timeout", "upstream_timeout", "Модель не ответила вовремя", cause = e)
+        } catch (e: SocketTimeoutException) {
+            throw MlException(GatewayTimeout, "timeout", "upstream_timeout", "Модель не ответила вовремя", cause = e)
+        } catch (e: java.net.ConnectException) {
+            throw MlException(BadGateway, "upstream_error", "upstream_unreachable", "Модель недоступна", cause = e)
+        } catch (e: UnresolvedAddressException) {
+            throw MlException(
+                BadGateway,
+                "upstream_error",
+                "upstream_unreachable",
+                "Модель недоступна",
+                cause = e,
+                details = "адрес не найден в DNS"
+            )
+        } catch (e: SerializationException) {
+            throw MlException(
+                BadGateway,
+                "upstream_error",
+                "upstream_bad_response",
+                "Модель ответила в неизвестном формате",
+                cause = e,
+                details = e.message
+            )
+        }
+    }
+
     override suspend fun complete(request: ChatRequest): ChatResponse {
         try {
 
@@ -57,7 +118,14 @@ class OpenAiCompatibleProvider(
         } catch (e: java.net.ConnectException) {
             throw MlException(BadGateway, "upstream_error", "upstream_unreachable", "Модель недоступна", cause = e)
         } catch (e: UnresolvedAddressException) {
-            throw MlException(BadGateway, "upstream_error", "upstream_unreachable", "Модель недоступна", cause = e, details = "адрес не найден в DNS")
+            throw MlException(
+                BadGateway,
+                "upstream_error",
+                "upstream_unreachable",
+                "Модель недоступна",
+                cause = e,
+                details = "адрес не найден в DNS"
+            )
         } catch (e: JsonConvertException) {
             throw MlException(
                 BadGateway,
@@ -69,6 +137,7 @@ class OpenAiCompatibleProvider(
             )
         }
     }
+
     private fun upstreamError(status: Int, body: String, retryAfter: String?): MlException {
         val details = "upstream $status: $body"
         return when (status) {
