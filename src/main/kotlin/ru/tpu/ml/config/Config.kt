@@ -26,7 +26,7 @@ data class Config(
                 requestTimeoutMs = getenv("ML_TIMEOUT_MS")?.toLongOrNull() ?: 60000,
                 upstreamModel = getenv("UPSTREAM_MODEL")?.takeIf { it.isNotBlank() },
                 debug = getenv("ML_DEBUG") == "true",
-                host = getenv("ML_HOST") ?: "0.0.0.0"
+                host = getenv("ML_HOST").takeIf{it.isNotBlank() } ?: "0.0.0.0"
             )
         }
     }
