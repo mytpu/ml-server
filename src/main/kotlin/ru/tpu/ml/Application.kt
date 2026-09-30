@@ -41,7 +41,7 @@ fun main() {
     }
     val chatService = ChatService(provider)
 
-    embeddedServer(Netty, config.port) {
+    embeddedServer(Netty, config.port,config.host) {
         module(config, chatService)
     }.start(true)
 }
