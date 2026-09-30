@@ -29,7 +29,7 @@ fun main() {
         "openai" -> {
             OpenAiCompatibleProvider(
                 baseUrl = config.upstreamUrl ?: error("Не задан upstream url"),
-                apiKey = config.upstreamKey ?: error("Не задан upstream key"),
+                apiKey = config.upstreamKey,
                 model = config.upstreamModel ?: error("Не задан upstream model"),
                 client = createHttpClient(config)
             )

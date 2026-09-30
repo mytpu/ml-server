@@ -21,7 +21,7 @@ data class Config(
                 backendApiKey = getenv("ML_API_KEY") ?: error("Не задана переменная окружения ML_API_KEY"),
                 provider = getenv("ML_PROVIDER")?: "mock",
                 upstreamUrl = getenv("UPSTREAM_URL"),
-                upstreamKey = getenv("UPSTREAM_KEY"),
+                upstreamKey = getenv("UPSTREAM_KEY")?.takeIf { it.isNotBlank() },
                 maxConcurrent = getenv("ML_MAX_CONCURRENT")?.toIntOrNull() ?: 8,
                 requestTimeoutMs = getenv("ML_TIMEOUT_MS")?.toLongOrNull() ?: 60000,
                 upstreamModel = getenv("UPSTREAM_MODEL")?.takeIf { it.isNotBlank() },

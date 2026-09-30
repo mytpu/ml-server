@@ -21,7 +21,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class OpenAiCompatibleProvider(
     private val baseUrl: String,
-    private val apiKey: String,
+    private val apiKey: String?,
     private val model: String,
     private val client: HttpClient
 ) : LlmProvider {
@@ -29,7 +29,9 @@ class OpenAiCompatibleProvider(
     override fun stream(request: ChatRequest): Flow<ChatChunk> = flow {
         try {
             client.preparePost("$baseUrl/chat/completions") {
-                bearerAuth(apiKey)
+                if (apiKey != null) {
+                    bearerAuth(apiKey)
+                }
                 timeout { requestTimeoutMillis = 300_000 }
                 contentType(ContentType.Application.Json)
                 setBody(request.copy(model = model, stream = true))
@@ -52,7 +54,14 @@ class OpenAiCompatibleProvider(
                         cuttedChunks++
                     } else break
                 }
-                if (cuttedChunks == 0) {throw MlException(BadGateway,code = "upstream_bad_response", message = "Модель дала пустой ответ", type = "upstream_error", details = "stream: no data chunks")
+                if (cuttedChunks == 0) {
+                    throw MlException(
+                        BadGateway,
+                        code = "upstream_bad_response",
+                        message = "Модель дала пустой ответ",
+                        type = "upstream_error",
+                        details = "stream: no data chunks"
+                    )
                 }
             }
         } catch (e: MlException) {
@@ -93,7 +102,9 @@ class OpenAiCompatibleProvider(
 
 
             val resp = client.post("$baseUrl/chat/completions") {
-                bearerAuth(apiKey)
+                if (apiKey != null) {
+                    bearerAuth(apiKey)
+                }
                 contentType(ContentType.Application.Json)
                 setBody(request.copy(model = model, stream = false))
             }
