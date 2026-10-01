@@ -39,9 +39,9 @@ fun main() {
             MockProvider
         }
     }
-    val chatService = ChatService(provider)
+    val chatService = ChatService(provider, config.maxConcurrent, config.queueWaitMs)
 
-    embeddedServer(Netty, config.port,config.host) {
+    embeddedServer(Netty, config.port, config.host) {
         module(config, chatService)
     }.start(true)
 }
@@ -77,56 +77,58 @@ fun Application.module(config: Config, chatService: ChatService) {
                 }
                 if (request.stream) {
                     val requestId = call.callId
-                    call.response.header(HttpHeaders.CacheControl, "no-cache")
-                    call.response.header("X-Accel-Buffering", "no")
-                    call.respondTextWriter(contentType = ContentType.Text.EventStream) {
-                        try {
-                            chatService.stream(request).collect { chunk ->
-                                write("data: ${AppJson.encodeToString(chunk)}\n\n")
+                    chatService.limited {
+                        call.response.header(HttpHeaders.CacheControl, "no-cache")
+                        call.response.header("X-Accel-Buffering", "no")
+                        call.respondTextWriter(contentType = ContentType.Text.EventStream) {
+                            try {
+                                chatService.stream(request).collect { chunk ->
+                                    write("data: ${AppJson.encodeToString(chunk)}\n\n")
+                                    flush()
+                                }
+                                write("data: [DONE]\n\n")
+                                flush()
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: MlException) {
+                                if (e.status.value >= 500) {
+                                    call.application.log.warn("stream ${e.code} ${e.details ?: e.message}")
+                                } else {
+                                    call.application.log.info("stream ${e.code} ${e.details ?: e.message}")
+                                }
+                                write(
+                                    "data: ${
+                                        AppJson.encodeToString(
+                                            ErrorBody(
+                                                ErrorInfo(
+                                                    message = e.message,
+                                                    type = e.type,
+                                                    code = e.code,
+                                                    request_id = requestId
+                                                )
+                                            )
+                                        )
+                                    }\n\n"
+                                )
+                                flush()
+                            } catch (e: Throwable) {
+                                call.application.log.error("stream internal_error", e)
+                                write(
+                                    "data: ${
+                                        AppJson.encodeToString(
+                                            ErrorBody(
+                                                ErrorInfo(
+                                                    message = "Внутренняя ошибка ML-сервера",
+                                                    type = "internal_error",
+                                                    code = "internal_error",
+                                                    request_id = requestId
+                                                )
+                                            )
+                                        )
+                                    }\n\n"
+                                )
                                 flush()
                             }
-                            write("data: [DONE]\n\n")
-                            flush()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: MlException) {
-                            if (e.status.value >= 500) {
-                                call.application.log.warn("stream ${e.code} ${e.details ?: e.message}")
-                            } else {
-                                call.application.log.info("stream ${e.code} ${e.details ?: e.message}")
-                            }
-                            write(
-                                "data: ${
-                                    AppJson.encodeToString(
-                                        ErrorBody(
-                                            ErrorInfo(
-                                                message = e.message,
-                                                type = e.type,
-                                                code = e.code,
-                                                request_id = requestId
-                                            )
-                                        )
-                                    )
-                                }\n\n"
-                            )
-                            flush()
-                        } catch (e: Throwable) {
-                            call.application.log.error("stream internal_error", e)
-                            write(
-                                "data: ${
-                                    AppJson.encodeToString(
-                                        ErrorBody(
-                                            ErrorInfo(
-                                                message = "Внутренняя ошибка ML-сервера",
-                                                type = "internal_error",
-                                                code = "internal_error",
-                                                request_id = requestId
-                                            )
-                                        )
-                                    )
-                                }\n\n"
-                            )
-                            flush()
                         }
                     }
                 } else {

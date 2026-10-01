@@ -12,7 +12,8 @@ data class Config(
     val requestTimeoutMs: Long,
     val upstreamModel : String?,
     val debug : Boolean,
-    val host : String
+    val host : String,
+    val queueWaitMs : Long
 ) {
     companion object {
         fun fromEnv() : Config {
@@ -26,7 +27,8 @@ data class Config(
                 requestTimeoutMs = getenv("ML_TIMEOUT_MS")?.toLongOrNull() ?: 60000,
                 upstreamModel = getenv("UPSTREAM_MODEL")?.takeIf { it.isNotBlank() },
                 debug = getenv("ML_DEBUG") == "true",
-                host = getenv("ML_HOST")?.takeIf{it.isNotBlank() } ?: "0.0.0.0"
+                host = getenv("ML_HOST")?.takeIf{it.isNotBlank() } ?: "0.0.0.0",
+                queueWaitMs = getenv("ML_QUEUE_WAIT_MS")?.toLongOrNull() ?: 5000L,
             )
         }
     }
