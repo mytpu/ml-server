@@ -6,7 +6,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.engine.*
-import io.ktor.server.netty.*
+import io.ktor.server.cio.*
 import io.ktor.server.plugins.callid.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.request.*
@@ -41,7 +41,7 @@ fun main() {
     }
     val chatService = ChatService(provider, config.maxConcurrent, config.queueWaitMs)
 
-    embeddedServer(Netty, config.port, config.host) {
+    embeddedServer(CIO, config.port, config.host) {
         module(config, chatService)
     }.start(true)
 }
@@ -71,6 +71,12 @@ fun Application.module(config: Config, chatService: ChatService) {
                 call.respond(ModelList(data = listOf(ModelInfo(id = "tpu-assistant"), ModelInfo(id = "tpu-analyze"))))
             }
             post("/v1/chat/completions") {
+                // Потолок тела запроса: куча нативной сборки — 80 МБ, одно огромное тело не должно её съесть
+                val length = call.request.contentLength()
+                if (length == null || length > config.maxBodyBytes) {
+                    throw MlException(HttpStatusCode.PayloadTooLarge, "invalid_request_error", "body_too_large",
+                        "Тело запроса должно быть с Content-Length и не больше ${config.maxBodyBytes} байт")
+                }
                 val request = call.receive<ChatRequest>()
                 if (request.messages.isEmpty()) {
                     throw MlException(BadRequest, "invalid_request_error", "empty_messages", "messages пустой")

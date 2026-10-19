@@ -1,0 +1,31 @@
+# Нативный ml-server под systemd (без Docker). Бинарник достаётся из образа:
+#   docker create --name ml-native mytpu/ml-server:native && docker cp ml-native:/app/ml-server /opt/ml-server/ml-server && docker rm ml-native
+# Установка: sudo cp etc/ml-server-native.service /etc/systemd/system/ml-server.service && sudo systemctl daemon-reload
+[Unit]
+Description=ML-server «Мой ТПУ» (GraalVM Native Image)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ml-server
+Group=ml-server
+# Файл с ключами — права 0600, владелец root
+EnvironmentFile=/etc/ml-server.env
+# Только локальный интерфейс: снаружи — через caddy с HTTPS
+Environment=ML_HOST=127.0.0.1
+ExecStart=/opt/ml-server/ml-server
+Restart=on-failure
+RestartSec=3
+# Потолок памяти процесса; куча нативного образа по умолчанию — 80 МБ (-R:MaxHeapSize при сборке)
+MemoryMax=128M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

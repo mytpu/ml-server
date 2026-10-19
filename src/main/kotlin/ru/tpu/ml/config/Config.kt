@@ -13,7 +13,8 @@ data class Config(
     val upstreamModel : String?,
     val debug : Boolean,
     val host : String,
-    val queueWaitMs : Long
+    val queueWaitMs : Long,
+    val maxBodyBytes : Long,
 ) {
     companion object {
         fun fromEnv() : Config {
@@ -29,6 +30,7 @@ data class Config(
                 debug = getenv("ML_DEBUG") == "true",
                 host = getenv("ML_HOST")?.takeIf{it.isNotBlank() } ?: "0.0.0.0",
                 queueWaitMs = getenv("ML_QUEUE_WAIT_MS")?.toLongOrNull() ?: 5000L,
+                maxBodyBytes = getenv("ML_MAX_BODY_BYTES")?.toLongOrNull() ?: 1_000_000L,
             )
         }
     }

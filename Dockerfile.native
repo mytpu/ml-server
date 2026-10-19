@@ -1,0 +1,31 @@
+# Нативная сборка ml-server (GraalVM Native Image). Собирать на машине с 6–8 ГБ свободной памяти — на сервере, не на слабом ПК:
+#   docker build -f Dockerfile.native -t mytpu/ml-server:native .
+# GraalVM 24: агент трассировки, которым собраны метаданные, — той же версии (формат reachability-metadata.json),
+# а Gradle 9.0 запускается на JDK до 24 включительно.
+FROM ghcr.io/graalvm/native-image-community:24.0.2 AS build
+WORKDIR /src
+
+# Корневой сертификат НУЦ Минцифры — в доверенные сертификаты JDK сборки: Native Image встраивает их в бинарник,
+# без него HTTPS к GigaChat API не установится
+COPY certs/russian_trusted_root_ca.pem /tmp/russian_trusted_root_ca.pem
+# Отпечаток сертификата сверить с официальным и передать при сборке (README-native.md): подменённый файл сорвёт сборку
+ARG RUSSIAN_CA_SHA256=""
+RUN if [ -n "$RUSSIAN_CA_SHA256" ]; then echo "$RUSSIAN_CA_SHA256  /tmp/russian_trusted_root_ca.pem" | sha256sum -c -; \
+    else echo "ВНИМАНИЕ: отпечаток сертификата НУЦ не задан (--build-arg RUSSIAN_CA_SHA256=...)"; fi
+RUN keytool -importcert -noprompt -cacerts -storepass changeit -alias russian_trusted_root_ca \
+        -file /tmp/russian_trusted_root_ca.pem
+
+# Сначала только описание сборки — слой с зависимостями кэшируется
+COPY gradlew settings.gradle.kts build.gradle.kts ./
+COPY gradle gradle
+RUN ./gradlew --no-daemon -q dependencies > /dev/null
+
+COPY src src
+RUN ./gradlew --no-daemon nativeCompile -x test
+
+FROM debian:bookworm-slim
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin ml
+COPY --from=build /src/build/native/nativeCompile/ml-server /app/ml-server
+USER 10001
+EXPOSE 8080
+ENTRYPOINT ["/app/ml-server"]

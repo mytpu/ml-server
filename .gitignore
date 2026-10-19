@@ -26,6 +26,8 @@ out/
 local.properties
 # на всякий случай: сертификаты и ключи
 *.pem
+# Публичный корневой сертификат НУЦ Минцифры (не секрет): нужен Dockerfile.native для HTTPS к GigaChat
+!certs/russian_trusted_root_ca.pem
 *.key
 *.p12
 *.jks
