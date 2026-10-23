@@ -61,7 +61,7 @@ fun Application.configureErrors(config: Config) {
                 message = "Неверный или отсутствующий ключ API",
                 type = "authentication_error"
             )
-        }
+        }   
         status(UnsupportedMediaType) { call, status ->
             call.respondError(
                 status = UnsupportedMediaType,
