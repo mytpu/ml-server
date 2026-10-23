@@ -21,7 +21,9 @@ data class Config(
         private val PROVIDERS = setOf("mock", "openai")
 
         fun fromEnv() : Config {
-            val provider = getenv("ML_PROVIDER") ?: "mock"
+            // Без значения по умолчанию: забытая переменная в проде не должна молча включать заглушку
+            val provider = getenv("ML_PROVIDER")?.takeIf { it.isNotBlank() }
+                ?: error("Не задана переменная окружения ML_PROVIDER: mock или openai")
             // Опечатка (в том числе «OpenAI») раньше молча включала заглушку: прод отвечал бы шаблонами
             require(provider in PROVIDERS) { "ML_PROVIDER=$provider: допустимо только mock или openai" }
             val upstreamUrl = getenv("UPSTREAM_URL")?.takeIf { it.isNotBlank() }
