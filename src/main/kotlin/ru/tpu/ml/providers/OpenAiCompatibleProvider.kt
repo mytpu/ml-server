@@ -15,6 +15,7 @@ import io.ktor.util.network.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.io.readByteArray
 import kotlinx.serialization.SerializationException
 import ru.tpu.ml.api.*
 import kotlin.coroutines.cancellation.CancellationException
@@ -23,7 +24,8 @@ class OpenAiCompatibleProvider(
     private val baseUrl: String,
     private val apiKey: String?,
     private val model: String,
-    private val client: HttpClient
+    private val client: HttpClient,
+    private val streamTimeoutMs: Long
 ) : LlmProvider {
     override val name = "openai"
     override fun stream(request: ChatRequest): Flow<ChatChunk> = flow {
@@ -32,20 +34,20 @@ class OpenAiCompatibleProvider(
                 if (apiKey != null) {
                     bearerAuth(apiKey)
                 }
-                timeout { requestTimeoutMillis = 300_000 }
+                timeout { requestTimeoutMillis = streamTimeoutMs }
                 contentType(ContentType.Application.Json)
                 setBody(request.copy(model = model, stream = true))
             }.execute { resp ->
                 if (!resp.status.isSuccess()) {
                     throw upstreamError(
-                        resp.status.value, resp.bodyAsText().take(300),
+                        resp.status.value, errorText(resp),
                         resp.headers[HttpHeaders.RetryAfter]
                     )
                 }
                 val channel = resp.bodyAsChannel()
                 var cuttedChunks = 0
                 while (true) {
-                    val line = channel.readUTF8Line() ?: break
+                    val line = channel.readUTF8Line(MAX_LINE_CHARS) ?: break
                     if (!line.startsWith("data:")) continue
                     val cut = line.substringAfter("data:").trim()
                     if (cut != "[DONE]") {
@@ -101,21 +103,23 @@ class OpenAiCompatibleProvider(
         try {
 
 
-            val resp = client.post("$baseUrl/chat/completions") {
+            // execute, а не post: тело ошибки читается с потолком (errorText), а не буферизуется целиком
+            return client.preparePost("$baseUrl/chat/completions") {
                 if (apiKey != null) {
                     bearerAuth(apiKey)
                 }
                 contentType(ContentType.Application.Json)
                 setBody(request.copy(model = model, stream = false))
+            }.execute { resp ->
+                if (!resp.status.isSuccess()) {
+                    throw upstreamError(
+                        resp.status.value, errorText(resp),
+                        resp.headers[HttpHeaders.RetryAfter]
+                    )
+                }
+                val answer: ChatResponse = resp.body()
+                answer.copy(model = request.model)
             }
-            if (!resp.status.isSuccess()) {
-                throw upstreamError(
-                    resp.status.value, resp.bodyAsText().take(300),
-                    resp.headers[HttpHeaders.RetryAfter]
-                )
-            }
-            val answer: ChatResponse = resp.body()
-            return answer.copy(model = request.model)
         } catch (e: MlException) {
             throw e
         } catch (e: CancellationException) {
@@ -200,4 +204,13 @@ class OpenAiCompatibleProvider(
 
     }
 
+
+    /** Тело ошибки апстрима — не больше 4 КБ в память, в сообщение — первые 300 символов. */
+    private suspend fun errorText(resp: HttpResponse): String =
+        resp.bodyAsChannel().readRemaining(ERROR_BODY_LIMIT).readByteArray().decodeToString().take(300)
+
+    private companion object {
+        const val ERROR_BODY_LIMIT = 4096L
+        const val MAX_LINE_CHARS = 1_000_000
+    }
 }

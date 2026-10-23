@@ -9,6 +9,7 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.callid.*
 import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import ru.tpu.ml.config.Config
 
@@ -25,6 +26,8 @@ class MlException(
 fun Application.configureErrors(config: Config) {
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
+            // Тело запроса в лог не пишем — только что запрос не разобран
+            call.application.log.warn("invalid_json ${call.request.path()}: ${cause::class.simpleName}")
             call.respondError(
                 status = BadRequest,
                 code = "invalid_json",
@@ -33,7 +36,8 @@ fun Application.configureErrors(config: Config) {
             )
         }
         exception<MlException> { call, cause ->
-            val line: String = "${cause.code} ${cause.details ?: cause.message}"
+            // Без тела ответа модели: в нём может быть эхо запроса пользователя. Только код и «upstream <статус>»
+            val line: String = "${cause.code} ${cause.message}" + (cause.details?.let { " (${it.substringBefore(':')})" } ?: "")
             if (cause.status.value >= 500) call.application.log.warn(line)
             else call.application.log.info(line)
             cause.retryAfter?.let {

@@ -31,13 +31,14 @@ fun main() {
                 baseUrl = config.upstreamUrl ?: error("Не задан upstream url"),
                 apiKey = config.upstreamKey,
                 model = config.upstreamModel ?: error("Не задан upstream model"),
-                client = createHttpClient(config)
+                client = createHttpClient(config),
+                streamTimeoutMs = config.streamTimeoutMs
             )
         }
 
-        else -> {
-            MockProvider
-        }
+        "mock" -> MockProvider
+
+        else -> error("ML_PROVIDER=${config.provider}: допустимо только mock или openai")
     }
     val chatService = ChatService(provider, config.maxConcurrent, config.queueWaitMs)
 
