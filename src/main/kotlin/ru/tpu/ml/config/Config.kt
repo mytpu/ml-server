@@ -16,9 +16,14 @@ data class Config(
     val queueWaitMs : Long,
     val maxBodyBytes : Long,
     val streamTimeoutMs : Long,
+    val trust: String = "untrusted",
+    val pdAllowed: Boolean = false,
+    val pii: String = "mask",
 ) {
     companion object {
         private val PROVIDERS = setOf("mock", "openai")
+        private val TRUST_LEVELS = setOf("trusted_tpu", "trusted_contract", "untrusted")
+        private val PII_MODES = setOf("off", "mask")
 
         fun fromEnv() : Config {
             // Без значения по умолчанию: забытая переменная в проде не должна молча включать заглушку
@@ -30,6 +35,30 @@ data class Config(
             require(provider != "mock" || upstreamUrl == null || getenv("ML_ALLOW_MOCK") == "true") {
                 "ML_PROVIDER=mock при заданном UPSTREAM_URL — похоже на ошибку настройки прода; если заглушка нужна, ML_ALLOW_MOCK=true"
             }
+
+            val trust = getenv("ML_PROVIDER_TRUST")?.takeIf { it.isNotBlank() } ?: "untrusted"
+            require(trust in TRUST_LEVELS) {
+                "ML_PROVIDER_TRUST=$trust: допустимо только trusted_tpu, trusted_contract или untrusted"
+            }
+
+            val pdAllowedRaw = getenv("ML_PD_ALLOWED")?.takeIf { it.isNotBlank() }
+            require(pdAllowedRaw == null || pdAllowedRaw == "true" || pdAllowedRaw == "false") {
+                "ML_PD_ALLOWED=$pdAllowedRaw: допустимо только true или false"
+            }
+            val pdAllowed = pdAllowedRaw == "true"
+
+            val pii = getenv("ML_PII")?.takeIf { it.isNotBlank() } ?: "mask"
+            require(pii in PII_MODES) {
+                "ML_PII=$pii: допустимо только off или mask"
+            }
+
+            require(!(pdAllowed && trust == "untrusted")) {
+                "ML_PD_ALLOWED=true при ML_PROVIDER_TRUST=untrusted: зарубежному или недоверенному провайдеру нельзя передавать личные данные"
+            }
+            require(!(pii == "off" && !pdAllowed)) {
+                "ML_PII=off при ML_PD_ALLOWED=false: маскирование обязательно, если передача личных данных запрещена"
+            }
+
             return Config(
                 port = getenv("PORT")?.toIntOrNull() ?: 8080,
                 backendApiKey = getenv("ML_API_KEY") ?: error("Не задана переменная окружения ML_API_KEY"),
@@ -44,6 +73,9 @@ data class Config(
                 queueWaitMs = getenv("ML_QUEUE_WAIT_MS")?.toLongOrNull() ?: 5000L,
                 maxBodyBytes = getenv("ML_MAX_BODY_BYTES")?.toLongOrNull() ?: 1_000_000L,
                 streamTimeoutMs = getenv("ML_STREAM_TIMEOUT_MS")?.toLongOrNull() ?: 300_000L,
+                trust = trust,
+                pdAllowed = pdAllowed,
+                pii = pii,
             )
         }
     }

@@ -16,6 +16,37 @@
 | Запуск под systemd без Docker | `etc/ml-server-native.service` |
 | Нагрузка для проверки | `tools/sse_load.py` |
 
+## Политика провайдера и маскирование
+
+Переменные окружения для защиты личных данных (152-ФЗ):
+- `ML_PROVIDER_TRUST` — уровень доверия: `trusted_tpu` (контур ТПУ), `trusted_contract` (договор с гарантиями в РФ), `untrusted` (по умолчанию, внешние сервисы).
+- `ML_PD_ALLOWED` — `true` | `false` (по умолчанию `false`): разрешено ли передавать личные данные провайдеру (`true` запрещено при `untrusted`).
+- `ML_PII` — `mask` | `off` (по умолчанию `mask`): маскирование личных данных (телефоны РФ, почты, паспорта РФ, ФИО) метками `⟦PHONE_1⟧`, `⟦EMAIL_1⟧`, `⟦PASSPORT_1⟧`, `⟦NAME_1⟧`. Режим `off` запрещен при `ML_PD_ALLOWED=false`.
+
+В ответе `GET /v1/models` помощник (`services/assistant`) видит политику каждой модели:
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "tpu-assistant",
+      "object": "model",
+      "trust": "untrusted",
+      "pd_allowed": false,
+      "pii": "mask"
+    },
+    {
+      "id": "tpu-analyze",
+      "object": "model",
+      "trust": "untrusted",
+      "pd_allowed": false,
+      "pii": "mask"
+    }
+  ]
+}
+```
+Если `pd_allowed=false`, помощник не отправляет запросы с персональными данными во внешнюю модель.
+
 ## Сборка на сервере
 ```bash
 docker build -f Dockerfile.native -t mytpu/ml-server:native .

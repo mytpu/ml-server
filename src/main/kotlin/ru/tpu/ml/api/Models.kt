@@ -130,4 +130,7 @@ data class ModelList(
 data class ModelInfo(
     val id : String,
     @SerialName("object") val obj : String = "model",
+    val trust: String = "untrusted",
+    @SerialName("pd_allowed") val pd_allowed: Boolean = false,
+    val pii: String = "mask",
 )

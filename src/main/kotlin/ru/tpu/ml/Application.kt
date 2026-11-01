@@ -40,7 +40,7 @@ fun main() {
 
         else -> error("ML_PROVIDER=${config.provider}: допустимо только mock или openai")
     }
-    val chatService = ChatService(provider, config.maxConcurrent, config.queueWaitMs)
+    val chatService = ChatService(provider, config.maxConcurrent, config.queueWaitMs, config.pii)
 
     embeddedServer(CIO, config.port, config.host) {
         module(config, chatService)
@@ -69,7 +69,24 @@ fun Application.module(config: Config, chatService: ChatService) {
         }
         authenticate("backend") {
             get("/v1/models") {
-                call.respond(ModelList(data = listOf(ModelInfo(id = "tpu-assistant"), ModelInfo(id = "tpu-analyze"))))
+                call.respond(
+                    ModelList(
+                        data = listOf(
+                            ModelInfo(
+                                id = "tpu-assistant",
+                                trust = config.trust,
+                                pd_allowed = config.pdAllowed,
+                                pii = config.pii
+                            ),
+                            ModelInfo(
+                                id = "tpu-analyze",
+                                trust = config.trust,
+                                pd_allowed = config.pdAllowed,
+                                pii = config.pii
+                            )
+                        )
+                    )
+                )
             }
             post("/v1/chat/completions") {
                 // Потолок тела запроса: куча нативной сборки — 80 МБ, одно огромное тело не должно её съесть
@@ -99,9 +116,9 @@ fun Application.module(config: Config, chatService: ChatService) {
                                 throw e
                             } catch (e: MlException) {
                                 if (e.status.value >= 500) {
-                                    call.application.log.warn("stream ${e.code} ${e.details ?: e.message}")
+                                    call.application.log.warn("stream ${e.code} ${e.message}" + (e.details?.let { " (${it.substringBefore(':')})" } ?: ""))
                                 } else {
-                                    call.application.log.info("stream ${e.code} ${e.details ?: e.message}")
+                                    call.application.log.info("stream ${e.code} ${e.message}" + (e.details?.let { " (${it.substringBefore(':')})" } ?: ""))
                                 }
                                 write(
                                     "data: ${
@@ -113,7 +130,7 @@ fun Application.module(config: Config, chatService: ChatService) {
                                                     code = e.code,
                                                     request_id = requestId
                                                 )
-                                            )
+                                             )
                                         )
                                     }\n\n"
                                 )
