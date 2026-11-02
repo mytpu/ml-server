@@ -17,7 +17,7 @@ class ChatService(
     private val provider: LlmProvider,
     private val maxConcurrent: Int,
     private val queueWaitMs: Long,
-    private val pii: String = "mask"
+    private val pii: String
 ) {
     private val log = LoggerFactory.getLogger(ChatService::class.java)
     private val semaphore = Semaphore(maxConcurrent)

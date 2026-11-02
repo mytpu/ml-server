@@ -29,14 +29,14 @@ object PiiMasker {
 
     // Фамилия и ФИО / инициалы
     private const val SURNAME =
-        """[А-ЯЁ][а-яё]*(?:(?:ов|ев|ёв|ин|ын)(?:[аеу]|ым|ой|ом)?|(?:ск|цк)(?:ий|ого|ому|им|ом|ая|ой|ую))"""
+        """[А-ЯЁ][а-яё]*(?:(?:ов|ев|ёв|ин|ын)(?:[аеу]|ым|ой|ом)?|(?:ск|цк)(?:ий|ого|ому|им|ом|ая|ой|ую)|(?:их|ых))"""
     private const val PATRONYMIC =
-        """[А-ЯЁ][а-яё]*(?:(?:вич|ич)(?:[ауе]|ем)?|(?:вн|ичн)(?:[аыеу]|ой)?)"""
+        """[А-ЯЁ][а-яё]*(?:(?:вич|ич)(?:[ауе]|ем|ом)?|(?:вн|ичн)(?:[аыеу]|ой)?)"""
     private const val FIRST_NAME = """[А-ЯЁ][а-яё]+"""
     private const val INITIALS = """[А-ЯЁ]\.(?:\s*[А-ЯЁ]\.)?"""
 
     private val NAME_REGEX = Regex(
-        """(?<![а-яёА-ЯЁ])(?:$SURNAME\s+(?:$INITIALS|$FIRST_NAME\s+$PATRONYMIC)|$FIRST_NAME\s+$PATRONYMIC\s+$SURNAME)(?![а-яёА-ЯЁ])"""
+        """(?<![\p{L}])(?:$SURNAME\s+(?:$INITIALS|$FIRST_NAME\s+$PATRONYMIC)|$FIRST_NAME\s+$PATRONYMIC\s+$SURNAME|$INITIALS\s+$SURNAME)(?![\p{L}])"""
     )
 
     private data class MatchSpan(val range: IntRange, val type: String, val value: String)
